@@ -1,0 +1,254 @@
+/**********************************
+***********************************
+
+Wireframe Render Speedy 2.0
+
+//Created On : Apr 07th 2012
+//Authored By - Crunk AKA Savio Fernandes
+
+//Install & Execute:
+-Copy this file to your maya default script directory
+-Source "crWireframeRenderSpeedy.mel"
+
+//Description:
+This scripts basically is an extension of my wireframe render tutorial, which uses toon shader.
+It gets quite annoying after sometime, doing same settings again and again. So this does it in a Click! :)
+
+//Usage :
+1. Select the Object Mesh.
+2. Select the Mode (Countour Shader/Toon Shader). Click Refresh.
+3. Click Assign new wireframe Shader.
+4. New Options will be available to tweak.
+5. Enjoy :)
+
+//Link To Page
+http://www.artbycrunk.com/script/maya/scripts-wireframe-render-speedy/
+
+
+//Link To Tutorial
+ToonShader - http://www.artbycrunk.com/tutorial/maya/rendering-wireframe-using-toonshader/
+ContourShader - http://www.artbycrunk.com/tutorial/maya/rendering-wireframe-using-mentalray-contourshader/
+
+// Copyright (c) 2012 artbycrunk.com <artbycrunk@gmail.com>
+// Released under GPL v3
+
+******************************* 
+UPDATES :
+
+Apr 07 2012 - Ver 2.0 - 	Added Switch Between Both Techinques.
+							Base for ToonWireframeShader Script.
+
+
+********************************** */
+
+global proc crWireframeRenSpeedy()
+{
+	int $WRS_Mode;
+	string $wireSS[];
+	
+	string $version = "2.0";
+	
+	if (`window -q -ex crWRSWin`) deleteUI crWRSWin;
+	window -t ("crWireframeRenderSpeedy "+$version) -in ("crTWR "+$version) -wh 276 120 -s 1 crWRSWin ;
+	
+	menuBarLayout crWRSWin_menuBarLayout;
+	
+	menu -tearOff 0 -l "Delete" WRSmenuDelete;
+
+	menu -tearOff 0 -l "About";	
+		menuItem -l "How To Use..." -ann "How To Use Script" -c "";
+		menuItem -l "artbycrunk@gmail.com";
+	
+	columnLayout -adjustableColumn true ;
+	
+	print ("Hello crWireframeRenSpeedy"+"   ");
+	
+	rowColumnLayout -numberOfColumns 2 -cw 1 180 -cw 2 75;
+		optionMenuGrp -cw 1 50 -label "Mode" -cc "crWRS_ModeChange()" crWRS_optionMode;
+			menuItem -label "Toon Shader";
+			menuItem -label "Countour Shader";
+		button -h 20 -l "Refresh" -c "crWireframeRenSpeedy()" but_refresh;
+	setParent ..;
+	
+	if(`optionVar -ex "crWRS_Mode"`)
+	{
+		$WRS_Mode = `optionVar -q "crWRS_Mode"`;
+		optionMenuGrp -e -sl $WRS_Mode crWRS_optionMode;
+	}
+	
+	separator;
+	if ($WRS_Mode == 1)
+	{
+		clear $wireSS;
+		$wireSS = `ls -type "pfxToon"`;
+		
+		for( $wireS in $wireSS )
+		{
+			if (`attributeExists "wireShader" $wireS`) {
+				frameLayout -cll 1 -borderVisible true -labelVisible true -labelAlign "center" -label $wireS -marginWidth 5 -marginHeight 5 -cc "crWRS_SizeChange(1)" -ec "crWRS_SizeChange(1)" ("Frame"+$wireS);
+					columnLayout -adjustableColumn true;
+						attrColorSliderGrp -l "Color" -cw 1 100 -cw 2 55 -cw 3 100 -cat 1 "right" 4 -at ($wireS+".creaseColor") -sb 0;
+						attrFieldSliderGrp -l "Thickness" -cw 1 100 -cw 2 55 -cw 3 100 -min 0 -max 10.0 -at ($wireS+".creaseLineWidth");
+						button -h 20 -l "Assign To Selected" -c ("removePfxToonOutlines; assignPfxToon "+$wireS+" 0");
+					separator;
+					setParent ..;
+				setParent ..;
+				menuItem -p "WRSmenuDelete" -l $wireS -ann ("Delete "+$wireS) -c ("crWRS_Delete(\""+$wireS+"\")");
+			}
+		}
+
+	}
+	
+	if ($WRS_Mode == 2)
+	{
+		clear $wireSS;
+		$wireSS = `ls -et "lambert"`;
+		
+		for( $wireS in $wireSS )
+		{
+			if (`attributeExists "wireShader" $wireS`) {
+				frameLayout -cll 1 -borderVisible true -labelVisible true -labelAlign "center" -label $wireS -marginWidth 5 -marginHeight 5 -cc "crWRS_SizeChange(2)" -ec "crWRS_SizeChange(2)" ("Frame"+$wireS);
+					columnLayout -adjustableColumn true;
+						attrColorSliderGrp -l "Color" -cw 1 100 -cw 2 55 -cw 3 100 -cat 1 "right" 4 -at ($wireS+"SG.miContourColor") -sb 0;
+						attrFieldSliderGrp -l "Thickness" -cw 1 100 -cw 2 55 -cw 3 100 -min 0 -max 10.0 -at ($wireS+"SG.miContourWidth");
+						button -h 20 -l "Assign To Selected" -c ("sets -e -forceElement "+$wireS+"SG;");
+					separator;
+					setParent ..;
+				setParent ..;
+				menuItem -p "WRSmenuDelete" -l $wireS -ann ("Delete "+$wireS) -c ("crWRS_Delete(\""+$wireS+"\")");
+			}
+		}
+	}
+	
+	separator;
+	separator;
+	button -h 48 -l "Assign New Wireframe" -c "crWRS_AssignWire";
+	button -l "www.artbycrunk.com" -h 20 but_about;
+	
+	crWRS_SizeChange($WRS_Mode);
+	
+	showWindow crWRSWin;
+	
+}
+
+global proc crWRS_MRinitialize()
+{
+	if (!`pluginInfo -query -l Mayatomr`)
+	{
+	   catch( `loadPlugin -qt Mayatomr`);  
+	}
+	
+	if ( catch(`getAttr "miDefaultFramebuffer.contourEnable"`) )
+	{
+		unifiedRenderGlobalsWindow;
+		setAttr "defaultRenderGlobals.currentRenderer" -type "string" mentalRay;
+		rendererChanged;
+		tabLayout -e -sti 3 mentalRayTabLayout;
+		fillSelectedTabForCurrentRenderer;
+		window -e -vis 0 unifiedRenderGlobalsWindow;
+		
+		setAttr "miDefaultFramebuffer.contourEnable" 1;
+		setAttr "miDefaultFramebuffer.contourSamples" 3;
+		setAttr "miDefaultFramebuffer.contourFilter" 1;
+		setAttr "miDefaultFramebuffer.contourFilterSupport" 2;
+		setAttr "miDefaultOptions.contourNormalGeom" 1;
+	}
+}
+
+global proc crWRS_ModeChange()
+{
+	int $WRS_Mode = `optionMenuGrp -q -sl crWRS_optionMode`;
+	optionVar -rm "crWRS_Mode" ;
+	optionVar -iv "crWRS_Mode" $WRS_Mode ;
+		if($WRS_Mode == 2)
+		{
+			crWRS_MRinitialize();
+		}else{
+			setAttr "defaultRenderGlobals.currentRenderer" -type "string" mayaSoftware;
+		}
+}
+
+
+global proc crWRS_Delete(string $shape)
+{
+	select $shape;
+	string $pfxtoon[] = `pickWalk -d up`;
+	if(size($pfxtoon)){delete $pfxtoon[0];}
+	crWireframeRenSpeedy();
+}
+
+global proc crWRS_SizeChange(int $mode)
+{
+	string $wireSS[];
+	
+	if($mode == 1) {clear $wireSS; $wireSS = `ls -type "pfxToon"`;}
+	if($mode == 2) {clear $wireSS; $wireSS = `ls -et "lambert"`;}
+	
+	if(size($wireSS))
+	{
+		int $winHeight = 115;
+		for( $wireS in $wireSS )
+		{ 
+			if (`attributeExists "wireShader" $wireS`) {
+				int $collapse = `frameLayout -q -cl ("Frame"+$wireS)`;
+				if($collapse == 1 ){$winHeight = $winHeight+22;}
+				else { $winHeight = $winHeight+100;}
+			}
+		}
+		
+		window -e -wh 276 $winHeight -s 1 crWRSWin ;
+		
+	} else {
+	window -e -wh 276 120 -s 1 crWRSWin ;
+	}
+}
+
+global proc crWRS_AssignWire() {
+
+	string $selectedNode[], $createdNode[], $nodetype;
+
+	$selectedNode = `ls -sl`;
+	
+	int $WRS_Mode = `optionMenuGrp -q -sl crWRS_optionMode`;
+	
+		if( nodeType($selectedNode[0]) == "transform" )
+		{
+			if( $WRS_Mode == 1 )
+			{
+				assignNewPfxToon;
+				$createdNode= `ls -sl`;
+				if( size($createdNode) ){ $nodetype = nodeType ($createdNode[0]);}
+				
+				if($nodetype == "pfxToon")
+				{
+					string $pfxtoon[] = `pickWalk -d up`;
+					string $pfxToonShader = `rename $pfxtoon[0] "crToonWireframeShader"`;
+					string $pfxToonShape[] = `pickWalk -d down`;
+
+					setAttr ($pfxToonShape[0]+".profileLines") 0;
+					setAttr ($pfxToonShape[0]+".borderLines") 0;
+					setAttr ($pfxToonShape[0]+".creaseLines") 1;
+					setAttr ($pfxToonShape[0]+".hardCreasesOnly") 0;
+					setAttr ($pfxToonShape[0]+".creaseAngleMax") 0;
+					setAttr ($pfxToonShape[0]+".creaseAngleMin") 0;
+					setAttr ($pfxToonShape[0]+".creaseLineWidth") 0.5;
+					addAttr -ln "wireShader"  -at long  -dv 1 $pfxToonShape[0];
+				}
+			}
+			if( $WRS_Mode == 2 )
+			{
+				string $shader = `createNode -ss -n "crCountourWireframeShader" "lambert"` ;
+				sets -renderable true -noSurfaceShader true -empty -name ($shader+"SG");
+				addAttr -ln "wireShader"  -at long  -dv 1 $shader;
+				connectAttr -f ($shader+".outColor") (($shader+"SG")+".surfaceShader");
+				sets -e -forceElement ($shader+"SG") $selectedNode;
+				
+				setAttr (($shader+"SG")+".miContourEnable") 1;
+			}
+			crWireframeRenSpeedy();
+		}else{
+			error "Please Select Valid Objects";
+		}
+	
+}
+crWireframeRenSpeedy();
